@@ -283,21 +283,63 @@ section[data-testid="stSidebar"] h3 {
     font-weight: 500;
 }
 
+/* Container & Column Overflow Protections */
+[data-testid="column"] {
+    min-width: 0 !important;
+    overflow-wrap: break-word !important;
+}
+
+[data-testid="stHorizontalBlock"] {
+    overflow: hidden !important;
+}
+
 /* Answer & Claim Cards */
 .white-box {
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 16px;
-    padding: 22px 24px;
+    padding: 24px 28px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.03);
     line-height: 1.75;
     font-size: 0.98rem;
     color: #1e293b;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    box-sizing: border-box !important;
+    word-break: break-word !important;
+}
+
+/* Responsive Tables: NEVER overlap adjacent columns */
+.white-box table, [data-testid="column"] table, .stMarkdown table {
+    display: block !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    border-collapse: collapse !important;
+    margin: 16px 0 !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+}
+
+.white-box th, .white-box td, [data-testid="column"] th, [data-testid="column"] td, .stMarkdown th, .stMarkdown td {
+    padding: 10px 14px !important;
+    border: 1px solid #e2e8f0 !important;
+    font-size: 0.88rem !important;
+    text-align: left !important;
+    vertical-align: top !important;
+    word-break: normal !important;
+    white-space: normal !important;
+}
+
+.white-box th, [data-testid="column"] th, .stMarkdown th {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+    font-weight: 700 !important;
 }
 
 .section-heading {
-    font-size: 1.1rem;
-    font-weight: 750;
+    font-size: 1.15rem;
+    font-weight: 800;
     color: #0f172a;
     margin-bottom: 12px;
     display: flex;
@@ -306,50 +348,57 @@ section[data-testid="stSidebar"] h3 {
 }
 
 .claim-card-clean {
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 12px;
-    border: 1px solid;
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    border: 1.5px solid;
     background: #ffffff;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    box-sizing: border-box !important;
 }
 
 .claim-header-clean {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    gap: 12px;
 }
 
 .claim-badge-pill {
-    font-size: 0.72rem;
-    font-weight: 750;
-    letter-spacing: 0.8px;
-    padding: 3px 10px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    padding: 4px 12px;
     border-radius: 9999px;
 }
 
 .claim-text-content {
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 600;
     color: #0f172a;
-    line-height: 1.5;
+    line-height: 1.55;
+    margin-bottom: 10px;
 }
 
 .claim-evidence-clean {
     margin-top: 10px;
-    padding: 10px 14px;
+    padding: 12px 16px;
     background: #f8fafc;
-    border-radius: 8px;
-    border-left: 3px solid #cbd5e1;
-    font-size: 0.84rem;
+    border-radius: 10px;
+    border-left: 3.5px solid #cbd5e1;
+    font-size: 0.86rem;
     color: #475569;
-    line-height: 1.5;
+    line-height: 1.55;
 }
 
 .claim-reason-clean {
-    margin-top: 8px;
-    font-size: 0.84rem;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed #e2e8f0;
+    font-size: 0.86rem;
     font-weight: 500;
 }
 
@@ -450,7 +499,7 @@ def render_claim_card(r, index: int):
         color = "#15803d"
         bg = "#f0fdf4"
         border = "#86efac"
-        label = "✓ VERIFIED"
+        label = "✓ VERIFIED TRUE"
     elif verdict == "FALSE":
         color = "#b91c1c"
         bg = "#fef2f2"
@@ -462,28 +511,34 @@ def render_claim_card(r, index: int):
         border = "#fde68a"
         label = "? UNVERIFIED"
 
-    # Evidence snippet
+    # Evidence snippets with clickable Wikipedia links
     ev_html = ""
     if evidence_list:
         for ev in evidence_list[:2]:
-            title = safe(getattr(ev, "title", "Wikipedia"))
+            raw_title = getattr(ev, "title", "Wikipedia") or "Wikipedia"
+            title = safe(raw_title)
             snippet = safe(getattr(ev, "snippet", ""))
+            wiki_slug = raw_title.replace(" ", "_")
+            wiki_url = f"https://en.wikipedia.org/wiki/{wiki_slug}"
             if snippet:
                 ev_html += (
                     f'<div class="claim-evidence-clean">'
-                    f'<div style="font-weight:700;color:#1e293b;margin-bottom:2px;">📖 {title}</div>'
+                    f'<div style="margin-bottom:4px;">'
+                    f'<a href="{wiki_url}" target="_blank" style="font-weight:700;color:#2563eb;text-decoration:none;">'
+                    f'📖 {title} ↗</a>'
+                    f'</div>'
                     f'<div>{snippet}</div>'
                     f'</div>'
                 )
     else:
         ev_html = (
             '<div class="claim-evidence-clean" style="color:#94a3b8;font-style:italic;">'
-            'No direct Wikipedia evidence found.'
+            'No direct Wikipedia evidence snippet retrieved.'
             '</div>'
         )
 
     reason_html = (
-        f'<div class="claim-reason-clean" style="color:{color};"><b>Analysis:</b> {reasoning}</div>'
+        f'<div class="claim-reason-clean" style="color:{color};"><b>Verification Analysis:</b> {reasoning}</div>'
         if reasoning
         else ""
     )
@@ -491,9 +546,12 @@ def render_claim_card(r, index: int):
     card_html = (
         f'<div class="claim-card-clean" style="background:{bg};border-color:{border};">'
         f'<div class="claim-header-clean">'
-        f'<span class="claim-badge-pill" style="background:#ffffff;color:{color};border:1px solid {border};">'
+        f'<div>'
+        f'<span style="font-size:0.8rem;font-weight:700;color:#64748b;margin-right:8px;">Claim #{index}</span>'
+        f'<span class="claim-badge-pill" style="background:#ffffff;color:{color};border:1.5px solid {border};">'
         f'{label}</span>'
-        f'<span style="font-size:0.8rem;color:#64748b;font-weight:600;">'
+        f'</div>'
+        f'<span style="font-size:0.82rem;color:#64748b;font-weight:600;">'
         f'{confidence:.0%} confidence</span>'
         f'</div>'
         f'<div class="claim-text-content">{claim}</div>'
@@ -691,6 +749,8 @@ if submit and query.strip():
                     "total_s": result.total_s,
                 }
             )
+            # Rerun so sidebar lifetime metrics and claims section refresh in perfect sync
+            st.rerun()
         except Exception as exc:
             st.error(f"❌ **Analysis Error**: {exc}")
             st.info(
@@ -812,64 +872,120 @@ if st.session_state.last_result:
         unsafe_allow_html=True,
     )
 
-    # 5. Dual Column View: Generated Answer vs Claim Verification
-    col_left, col_right = st.columns([1, 1.05], gap="large")
+    # 5. Dedicated Sections with View Switcher (No Overlap)
+    claims = res.claims or []
+    false_claims = [r for r in claims if getattr(r, "verdict", "") == "FALSE"]
+    unver_claims = [r for r in claims if getattr(r, "verdict", "") == "UNVERIFIED"]
+    ver_claims = [r for r in claims if getattr(r, "verdict", "") == "VERIFIED"]
 
-    with col_left:
+    c_head, c_mode = st.columns([3, 1.6])
+    with c_head:
         st.markdown(
-            '<div class="section-heading">💬 Generated Answer</div>',
+            '<div class="section-heading">Detailed Analysis & Fact-Check</div>',
             unsafe_allow_html=True,
         )
-        st.markdown(
-            f'<div class="white-box">{safe(res.answer)}</div>',
-            unsafe_allow_html=True,
+    with c_mode:
+        view_mode = st.radio(
+            "Layout",
+            ["📑 Dedicated Sections", "◫ Side-by-Side Split"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="analysis_view_mode",
         )
 
-    with col_right:
-        st.markdown(
-            '<div class="section-heading">🔎 Claim-by-Claim Fact Check</div>',
-            unsafe_allow_html=True,
-        )
-
-        claims = res.claims or []
-        false_claims = [
-            r for r in claims if getattr(r, "verdict", "") == "FALSE"
-        ]
-        unver_claims = [
-            r for r in claims if getattr(r, "verdict", "") == "UNVERIFIED"
-        ]
-        ver_claims = [
-            r for r in claims if getattr(r, "verdict", "") == "VERIFIED"
-        ]
-
+    def render_claims_content():
         if not claims:
             st.info("No extractable factual claims detected.")
-        else:
-            # 1. False claims shown first with high urgency
+            return
+
+        claim_tab_all, claim_tab_false, claim_tab_unver, claim_tab_ver = st.tabs(
+            [
+                f"📋 All Claims ({len(claims)})",
+                f"🚨 Hallucinated ({len(false_claims)})",
+                f"⚠️ Unverified ({len(unver_claims)})",
+                f"✅ Verified ({len(ver_claims)})",
+            ]
+        )
+
+        with claim_tab_all:
             if false_claims:
                 st.markdown(
-                    f'<div style="font-size:0.85rem;font-weight:800;color:#dc2626;margin-bottom:8px;">🚨 HALLUCINATED CLAIMS ({len(false_claims)})</div>',
+                    f'<div style="font-size:0.88rem;font-weight:800;color:#dc2626;margin:8px 0 10px 0;">🚨 HALLUCINATED CLAIMS ({len(false_claims)})</div>',
                     unsafe_allow_html=True,
                 )
                 for i, r in enumerate(false_claims, 1):
                     render_claim_card(r, i)
 
-            # 2. Unverified claims
             if unver_claims:
                 st.markdown(
-                    f'<div style="font-size:0.85rem;font-weight:800;color:#d97706;margin-bottom:8px;">⚠️ COULD NOT VERIFY ({len(unver_claims)})</div>',
+                    f'<div style="font-size:0.88rem;font-weight:800;color:#d97706;margin:12px 0 10px 0;">⚠️ COULD NOT VERIFY ({len(unver_claims)})</div>',
                     unsafe_allow_html=True,
                 )
-                for i, r in enumerate(unver_claims, 1):
+                for i, r in enumerate(unver_claims, len(false_claims) + 1):
                     render_claim_card(r, i)
 
-            # 3. Verified claims
             if ver_claims:
-                with st.expander(
-                    f"✅ Verified Claims ({len(ver_claims)})", expanded=True
-                ):
-                    for i, r in enumerate(ver_claims, 1):
-                        render_claim_card(r, i)
+                st.markdown(
+                    f'<div style="font-size:0.88rem;font-weight:800;color:#15803d;margin:12px 0 10px 0;">✅ VERIFIED CLAIMS ({len(ver_claims)})</div>',
+                    unsafe_allow_html=True,
+                )
+                for i, r in enumerate(ver_claims, len(false_claims) + len(unver_claims) + 1):
+                    render_claim_card(r, i)
+
+        with claim_tab_false:
+            if false_claims:
+                for i, r in enumerate(false_claims, 1):
+                    render_claim_card(r, i)
+            else:
+                st.success("🎉 No hallucinated or false claims detected!")
+
+        with claim_tab_unver:
+            if unver_claims:
+                for i, r in enumerate(unver_claims, 1):
+                    render_claim_card(r, i)
+            else:
+                st.info("No unverified claims.")
+
+        with claim_tab_ver:
+            if ver_claims:
+                for i, r in enumerate(ver_claims, 1):
+                    render_claim_card(r, i)
+            else:
+                st.warning("No claims could be positively verified by Wikipedia snippets.")
+
+    def render_answer_box():
+        st.markdown(
+            '<div style="font-size:0.95rem;font-weight:700;color:#475569;margin-bottom:8px;">💬 Generated LLM Answer</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="white-box">\n\n{res.answer}\n\n</div>',
+            unsafe_allow_html=True,
+        )
+
+    if view_mode == "📑 Dedicated Sections":
+        # 1. Full-Width Answer Section
+        render_answer_box()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # 2. Full-Width Dedicated Claims Section
+        st.markdown(
+            f'<div class="section-heading">🔎 Claim-by-Claim Fact Check ({len(claims)} claims evaluated)</div>',
+            unsafe_allow_html=True,
+        )
+        render_claims_content()
+    else:
+        # Side-by-Side Split View (with complete overflow and bleed protection)
+        col_left, col_right = st.columns([1, 1.15], gap="large")
+        with col_left:
+            render_answer_box()
+        with col_right:
+            st.markdown(
+                f'<div style="font-size:0.95rem;font-weight:700;color:#475569;margin-bottom:8px;">🔎 Claim-by-Claim Fact Check ({len(claims)})</div>',
+                unsafe_allow_html=True,
+            )
+            render_claims_content()
 
 # ── Session History ───────────────────────────────────────────────────────────
 if st.session_state.history:

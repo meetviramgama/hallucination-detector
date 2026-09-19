@@ -1,0 +1,16 @@
+.venv/
+venv/
+.git/
+.gitignore
+.env
+.env.*
+.streamlit/secrets.toml
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.DS_Store
+.vscode/
+.idea/
+results/
+scratch/

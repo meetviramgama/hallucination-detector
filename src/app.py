@@ -1,0 +1,909 @@
+"""
+Hallucination Detector — Streamlit Dashboard (Clean Light Theme)
+Run:  streamlit run src/app.py
+"""
+
+import os
+import sys
+import html
+from pathlib import Path
+
+ROOT = Path(__file__).parent.parent
+SRC = Path(__file__).parent
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import streamlit as st
+from pipeline.pipeline import run
+
+# ── Page config ───────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Hallucination Detector · AI Fact Checker",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── Session state ─────────────────────────────────────────────────────────────
+for key, val in {
+    "history": [],
+    "total_verified": 0,
+    "total_false": 0,
+    "total_unver": 0,
+    "total_queries": 0,
+    "last_result": None,
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
+
+# ── Styling: Clean White & Modern Light Theme ─────────────────────────────────
+st.markdown(
+    """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+/* Global Font & White Background */
+html, body, [class*="css"], .stApp {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+}
+
+[data-testid="stAppViewContainer"] {
+    background-color: #f8fafc !important;
+}
+
+.block-container {
+    padding-top: 1.5rem !important;
+    padding-bottom: 3rem !important;
+    max-width: 1360px !important;
+}
+
+/* Sidebar Light Theme */
+section[data-testid="stSidebar"] {
+    background-color: #ffffff !important;
+    border-right: 1px solid #e2e8f0 !important;
+}
+
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: #0f172a !important;
+    font-weight: 700 !important;
+}
+
+/* Hero Section */
+.hero-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 32px 36px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04);
+}
+
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.hero-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.8px;
+    line-height: 1.2;
+    margin-bottom: 8px;
+}
+
+.hero-desc {
+    font-size: 1rem;
+    color: #64748b;
+    line-height: 1.6;
+    max-width: 760px;
+    margin: 0;
+}
+
+/* Input & Button Styling */
+.stTextInput input {
+    background-color: #ffffff !important;
+    border: 1.5px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    color: #0f172a !important;
+    font-size: 1rem !important;
+    padding: 12px 16px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+}
+
+.stTextInput input:focus {
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}
+
+.stButton button[kind="primary"] {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    padding: 12px 24px !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+    transition: all 0.2s ease !important;
+}
+
+.stButton button[kind="primary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
+}
+
+.stButton button:not([kind="primary"]) {
+    background-color: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #475569 !important;
+    border-radius: 10px !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    transition: all 0.15s ease !important;
+}
+
+.stButton button:not([kind="primary"]):hover {
+    border-color: #2563eb !important;
+    color: #2563eb !important;
+    background-color: #f8fafc !important;
+}
+
+/* Verdict Banner */
+.verdict-banner {
+    border-radius: 16px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.verdict-icon {
+    font-size: 3rem;
+    line-height: 1;
+}
+
+.verdict-info {
+    flex: 1;
+}
+
+.verdict-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 4px;
+}
+
+.verdict-sub {
+    font-size: 0.95rem;
+    opacity: 0.9;
+    line-height: 1.4;
+}
+
+.verdict-score-box {
+    text-align: center;
+    padding: 8px 20px;
+    border-radius: 12px;
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.06);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.verdict-score-num {
+    font-size: 2.8rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.verdict-score-lbl {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #64748b;
+    margin-top: 4px;
+}
+
+/* Stat Cards */
+.stat-card-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.stat-card-white {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 16px 20px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.stat-card-num {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.stat-card-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    margin-top: 4px;
+}
+
+/* Stacked Accuracy Bar */
+.progress-bar-wrap {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.progress-track {
+    height: 14px;
+    border-radius: 7px;
+    background: #f1f5f9;
+    overflow: hidden;
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.progress-seg {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.progress-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 0.82rem;
+    color: #475569;
+    font-weight: 500;
+}
+
+/* Answer & Claim Cards */
+.white-box {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    line-height: 1.75;
+    font-size: 0.98rem;
+    color: #1e293b;
+}
+
+.section-heading {
+    font-size: 1.1rem;
+    font-weight: 750;
+    color: #0f172a;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.claim-card-clean {
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 1px solid;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.claim-header-clean {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.claim-badge-pill {
+    font-size: 0.72rem;
+    font-weight: 750;
+    letter-spacing: 0.8px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+}
+
+.claim-text-content {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.5;
+}
+
+.claim-evidence-clean {
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border-left: 3px solid #cbd5e1;
+    font-size: 0.84rem;
+    color: #475569;
+    line-height: 1.5;
+}
+
+.claim-reason-clean {
+    margin-top: 8px;
+    font-size: 0.84rem;
+    font-weight: 500;
+}
+
+/* Pipeline Timing Flow */
+.pipeline-clean-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 20px;
+    margin-bottom: 24px;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+.pipeline-step-item {
+    text-align: center;
+}
+
+.pipeline-step-title {
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pipeline-step-time {
+    color: #2563eb;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+/* History Card */
+.hist-card-clean {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def safe(v):
+    return html.escape(str(v)) if v is not None else ""
+
+
+def get_verdict_style(score: int):
+    if score >= 80:
+        return {
+            "icon": "✅",
+            "title": "High Trust — Verified",
+            "sub": "Most factual claims have been corroborated by external Wikipedia sources.",
+            "color": "#15803d",  # Green-700
+            "bg": "#f0fdf4",  # Green-50
+            "border": "#bbf7d0",  # Green-200
+            "badge": "TRUSTWORTHY",
+        }
+    if score >= 55:
+        return {
+            "icon": "⚠️",
+            "title": "Mixed Reliability — Review Carefully",
+            "sub": "Some claims are verified, but others couldn't be confirmed or are contradictory.",
+            "color": "#b45309",  # Amber-700
+            "bg": "#fffbeb",  # Amber-50
+            "border": "#fde68a",  # Amber-200
+            "badge": "MIXED",
+        }
+    return {
+        "icon": "🚨",
+        "title": "Hallucinations Detected",
+        "sub": "This answer contains false or unverified claims. Do not rely on it without independent verification.",
+        "color": "#b91c1c",  # Red-700
+        "bg": "#fef2f2",  # Red-50
+        "border": "#fecaca",  # Red-200
+        "badge": "UNRELIABLE",
+    }
+
+
+def render_claim_card(r, index: int):
+    verdict = str(getattr(r, "verdict", "UNVERIFIED")).upper()
+    confidence = float(getattr(r, "confidence", 0) or 0)
+    claim = safe(getattr(r, "claim", ""))
+    reasoning = safe(getattr(r, "reasoning", ""))
+    evidence_list = getattr(r, "evidence", []) or []
+
+    if verdict == "VERIFIED":
+        color = "#15803d"
+        bg = "#f0fdf4"
+        border = "#86efac"
+        label = "✓ VERIFIED"
+    elif verdict == "FALSE":
+        color = "#b91c1c"
+        bg = "#fef2f2"
+        border = "#fca5a5"
+        label = "✗ FALSE — HALLUCINATED"
+    else:
+        color = "#b45309"
+        bg = "#fffbeb"
+        border = "#fde68a"
+        label = "? UNVERIFIED"
+
+    # Evidence snippet
+    ev_html = ""
+    if evidence_list:
+        for ev in evidence_list[:2]:
+            title = safe(getattr(ev, "title", "Wikipedia"))
+            snippet = safe(getattr(ev, "snippet", ""))
+            if snippet:
+                ev_html += (
+                    f'<div class="claim-evidence-clean">'
+                    f'<div style="font-weight:700;color:#1e293b;margin-bottom:2px;">📖 {title}</div>'
+                    f'<div>{snippet}</div>'
+                    f'</div>'
+                )
+    else:
+        ev_html = (
+            '<div class="claim-evidence-clean" style="color:#94a3b8;font-style:italic;">'
+            'No direct Wikipedia evidence found.'
+            '</div>'
+        )
+
+    reason_html = (
+        f'<div class="claim-reason-clean" style="color:{color};"><b>Analysis:</b> {reasoning}</div>'
+        if reasoning
+        else ""
+    )
+
+    card_html = (
+        f'<div class="claim-card-clean" style="background:{bg};border-color:{border};">'
+        f'<div class="claim-header-clean">'
+        f'<span class="claim-badge-pill" style="background:#ffffff;color:{color};border:1px solid {border};">'
+        f'{label}</span>'
+        f'<span style="font-size:0.8rem;color:#64748b;font-weight:600;">'
+        f'{confidence:.0%} confidence</span>'
+        f'</div>'
+        f'<div class="claim-text-content">{claim}</div>'
+        f'{ev_html}'
+        f'{reason_html}'
+        f'</div>'
+    )
+
+    st.markdown(card_html, unsafe_allow_html=True)
+
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### 🛡️ Hallucination Detector")
+    st.caption("Factual Claim Verification via Wikipedia")
+    st.divider()
+
+    n = st.session_state.total_queries
+    v = st.session_state.total_verified
+    f = st.session_state.total_false
+    u = st.session_state.total_unver
+    total_claims_all = v + f + u
+
+    st.markdown(
+        f"""
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+        <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-size:1.5rem;font-weight:800;color:#0f172a;">{n}</div>
+            <div style="font-size:0.7rem;color:#64748b;font-weight:700;">QUERIES</div>
+        </div>
+        <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-size:1.5rem;font-weight:800;color:#15803d;">{v}</div>
+            <div style="font-size:0.7rem;color:#15803d;font-weight:700;">VERIFIED</div>
+        </div>
+        <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-size:1.5rem;font-weight:800;color:#b91c1c;">{f}</div>
+            <div style="font-size:0.7rem;color:#b91c1c;font-weight:700;">FLAGGED</div>
+        </div>
+        <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-size:1.5rem;font-weight:800;color:#b45309;">{u}</div>
+            <div style="font-size:0.7rem;color:#b45309;font-weight:700;">UNVERIFIED</div>
+        </div>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    if total_claims_all > 0:
+        vp = v / total_claims_all * 100
+        up = u / total_claims_all * 100
+        fp = f / total_claims_all * 100
+        st.markdown(
+            f"""
+        <div style="margin-bottom:16px;">
+            <div style="font-size:0.75rem;font-weight:700;color:#64748b;margin-bottom:6px;">LIFETIME ACCURACY</div>
+            <div style="height:10px;border-radius:5px;background:#e2e8f0;overflow:hidden;display:flex;">
+                <div style="width:{vp}%;background:#16a34a;"></div>
+                <div style="width:{up}%;background:#f59e0b;"></div>
+                <div style="width:{fp}%;background:#ef4444;"></div>
+            </div>
+            <div style="font-size:0.75rem;color:#64748b;margin-top:6px;display:flex;justify-content:space-between;">
+                <span>🟢 {vp:.0f}%</span>
+                <span>🟡 {up:.0f}%</span>
+                <span>🔴 {fp:.0f}%</span>
+            </div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("**How Verification Works:**")
+    st.markdown(
+        """
+    1. **Generate** — LLM produces comprehensive answer  
+    2. **Extract** — Isolates atomic factual claims  
+    3. **Retrieve** — Fetches Wikipedia search snippets  
+    4. **Verify** — Rigorously tests claim vs evidence  
+    5. **Score** — Computes weighted trust index (0-100)
+    """
+    )
+
+    st.divider()
+    st.markdown("**API Settings**")
+    existing_key = os.environ.get("GROQ_API_KEY", "")
+    if hasattr(st, "secrets") and not existing_key and "GROQ_API_KEY" in st.secrets:
+        existing_key = st.secrets["GROQ_API_KEY"]
+
+    has_env_key = bool(existing_key)
+    api_key_val = st.text_input(
+        "Groq API Key",
+        value=st.session_state.get("user_groq_key", ""),
+        type="password",
+        placeholder="Configured via environment" if has_env_key else "gsk_...",
+        help="Provide your Groq API key here if not preset in your deployment environment.",
+    )
+    if api_key_val.strip():
+        os.environ["GROQ_API_KEY"] = api_key_val.strip()
+        st.session_state["user_groq_key"] = api_key_val.strip()
+    elif has_env_key:
+        os.environ["GROQ_API_KEY"] = existing_key
+
+    st.divider()
+    if st.button("🗑 Clear Session History", use_container_width=True):
+        st.session_state.history = []
+        st.session_state.total_verified = 0
+        st.session_state.total_false = 0
+        st.session_state.total_unver = 0
+        st.session_state.total_queries = 0
+        st.session_state.last_result = None
+        st.rerun()
+
+
+# ── Hero Header ───────────────────────────────────────────────────────────────
+st.markdown(
+    """
+<div class="hero-card">
+    <div class="hero-badge">⚡ Automated AI Fact-Checking Engine</div>
+    <div class="hero-title">LLM Hallucination Detector</div>
+    <p class="hero-desc">
+        Evaluate AI generated responses claim-by-claim against trusted real-world knowledge sources.
+        Instantly identify accurate statements, hallucinated errors, and unverified information.
+    </p>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+# ── Query Input ───────────────────────────────────────────────────────────────
+c_in, c_btn = st.columns([5, 1.2])
+with c_in:
+    query = st.text_input(
+        "Query",
+        placeholder="e.g. When was the Eiffel Tower constructed and who designed it?",
+        label_visibility="collapsed",
+        key="query_input",
+    )
+with c_btn:
+    submit = st.button("🔍  Analyse", use_container_width=True, type="primary")
+
+st.markdown(
+    '<div style="font-size:0.8rem;color:#64748b;margin: 4px 0 10px 2px;font-weight:600;">Sample questions:</div>',
+    unsafe_allow_html=True,
+)
+
+ex_cols = st.columns(4)
+sample_queries = [
+    "Tell me about the Eiffel Tower",
+    "Who invented the telephone and when?",
+    "Tell me about Marie Curie's Nobel Prizes",
+    "What is the population of France?",
+]
+
+for col, sample in zip(ex_cols, sample_queries):
+    with col:
+        lbl = sample[:32] + ("…" if len(sample) > 32 else "")
+        if st.button(lbl, use_container_width=True, key=f"ex_{sample}"):
+            query = sample
+            submit = True
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ── API Key Availability Banner ───────────────────────────────────────────────
+active_api_key = os.environ.get("GROQ_API_KEY", "")
+if not active_api_key:
+    st.warning(
+        "🔑 **Groq API Key Required**: Please enter your Groq API key in the left sidebar "
+        "or configure `GROQ_API_KEY` in environment / Streamlit Secrets to run analysis. "
+        "[Get a free API key at Groq Console](https://console.groq.com/keys)."
+    )
+
+# ── Processing & Pipeline Execution ───────────────────────────────────────────
+if submit and query.strip():
+    if not os.environ.get("GROQ_API_KEY"):
+        st.error("⚠️ Groq API key is missing. Please enter your API key in the sidebar to proceed.")
+    else:
+        try:
+            with st.spinner(
+                "Running pipeline: Generating → Extracting → Retrieving → Verifying…"
+            ):
+                result = run(query.strip())
+
+            st.session_state.last_result = result
+            st.session_state.total_verified += result.trust_score.verified_count
+            st.session_state.total_false += result.trust_score.false_count
+            st.session_state.total_unver += result.trust_score.unverified_count
+            st.session_state.total_queries += 1
+            st.session_state.history.append(
+                {
+                    "query": query.strip(),
+                    "score": result.trust_score.score,
+                    "label": result.trust_score.label,
+                    "verified": result.trust_score.verified_count,
+                    "false": result.trust_score.false_count,
+                    "unverified": result.trust_score.unverified_count,
+                    "total_s": result.total_s,
+                }
+            )
+        except Exception as exc:
+            st.error(f"❌ **Analysis Error**: {exc}")
+            st.info(
+                "💡 If you encountered an authentication or quota error, "
+                "please double-check your Groq API key in the sidebar."
+            )
+
+# ── Results Rendering ─────────────────────────────────────────────────────────
+if st.session_state.last_result:
+    res = st.session_state.last_result
+    score = int(res.trust_score.score)
+    vstyle = get_verdict_style(score)
+
+    total_c = res.trust_score.total_claims
+    vc = res.trust_score.verified_count
+    fc = res.trust_score.false_count
+    uc = res.trust_score.unverified_count
+
+    # 1. Big Verdict Card
+    st.markdown(
+        f"""
+    <div class="verdict-banner" style="background:{vstyle['bg']};border:1.5px solid {vstyle['border']};">
+        <div class="verdict-icon">{vstyle['icon']}</div>
+        <div class="verdict-info">
+            <div class="verdict-title" style="color:{vstyle['color']};">{vstyle['title']}</div>
+            <div class="verdict-sub" style="color:{vstyle['color']};">{vstyle['sub']}</div>
+        </div>
+        <div class="verdict-score-box">
+            <div class="verdict-score-num" style="color:{vstyle['color']};">{score}</div>
+            <div class="verdict-score-lbl">TRUST SCORE</div>
+        </div>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    # 2. Metric Stat Cards
+    st.markdown(
+        f"""
+    <div class="stat-card-grid">
+        <div class="stat-card-white" style="border-top:3px solid #ef4444;">
+            <div class="stat-card-num" style="color:#dc2626;">{fc}</div>
+            <div class="stat-card-lbl" style="color:#dc2626;">🚨 FALSE (HALLUCINATED)</div>
+        </div>
+        <div class="stat-card-white" style="border-top:3px solid #f59e0b;">
+            <div class="stat-card-num" style="color:#d97706;">{uc}</div>
+            <div class="stat-card-lbl" style="color:#d97706;">⚠️ UNVERIFIED</div>
+        </div>
+        <div class="stat-card-white" style="border-top:3px solid #10b981;">
+            <div class="stat-card-num" style="color:#16a34a;">{vc}</div>
+            <div class="stat-card-lbl" style="color:#16a34a;">✅ VERIFIED TRUE</div>
+        </div>
+        <div class="stat-card-white" style="border-top:3px solid #6366f1;">
+            <div class="stat-card-num" style="color:#4f46e5;">{total_c}</div>
+            <div class="stat-card-lbl" style="color:#4f46e5;">📊 TOTAL CLAIMS</div>
+        </div>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    # 3. Accuracy Progress Bar
+    if total_c > 0:
+        vp = vc / total_c * 100
+        up = uc / total_c * 100
+        fp = fc / total_c * 100
+        st.markdown(
+            f"""
+        <div class="progress-bar-wrap">
+            <div style="font-size:0.8rem;font-weight:700;color:#0f172a;margin-bottom:8px;">
+                CLAIM BREAKDOWN ({total_c} claims analysed)
+            </div>
+            <div class="progress-track">
+                <div class="progress-seg" style="width:{fp}%;background:#ef4444;" title="False"></div>
+                <div class="progress-seg" style="width:{up}%;background:#f59e0b;" title="Unverified"></div>
+                <div class="progress-seg" style="width:{vp}%;background:#10b981;" title="Verified"></div>
+            </div>
+            <div class="progress-legend">
+                <span style="color:#dc2626;font-weight:600;">🔴 {fc} False ({fp:.0f}%)</span>
+                <span style="color:#d97706;font-weight:600;">🟡 {uc} Unverified ({up:.0f}%)</span>
+                <span style="color:#16a34a;font-weight:600;">🟢 {vc} Verified ({vp:.0f}%)</span>
+                <span style="margin-left:auto;color:#64748b;">Pipeline Total Latency: {res.total_s:.2f}s</span>
+            </div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+    # 4. Latency Timing Flow
+    st.markdown(
+        f"""
+    <div class="pipeline-clean-bar">
+        <div class="pipeline-step-item">
+            <div class="pipeline-step-title">🧠 1. Generate</div>
+            <div class="pipeline-step-time">{res.generator_s:.2f}s</div>
+        </div>
+        <div>→</div>
+        <div class="pipeline-step-item">
+            <div class="pipeline-step-title">📝 2. Extract</div>
+            <div class="pipeline-step-time">{res.extractor_s:.2f}s</div>
+        </div>
+        <div>→</div>
+        <div class="pipeline-step-item">
+            <div class="pipeline-step-title">📚 3. Retrieve</div>
+            <div class="pipeline-step-time">{res.retriever_s:.2f}s</div>
+        </div>
+        <div>→</div>
+        <div class="pipeline-step-item">
+            <div class="pipeline-step-title">⚖️ 4. Verify</div>
+            <div class="pipeline-step-time">{res.verifier_s:.2f}s</div>
+        </div>
+        <div>→</div>
+        <div class="pipeline-step-item">
+            <div class="pipeline-step-title">🛡️ 5. Score</div>
+            <div class="pipeline-step-time">{res.trust_score.score}/100</div>
+        </div>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    # 5. Dual Column View: Generated Answer vs Claim Verification
+    col_left, col_right = st.columns([1, 1.05], gap="large")
+
+    with col_left:
+        st.markdown(
+            '<div class="section-heading">💬 Generated Answer</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="white-box">{safe(res.answer)}</div>',
+            unsafe_allow_html=True,
+        )
+
+    with col_right:
+        st.markdown(
+            '<div class="section-heading">🔎 Claim-by-Claim Fact Check</div>',
+            unsafe_allow_html=True,
+        )
+
+        claims = res.claims or []
+        false_claims = [
+            r for r in claims if getattr(r, "verdict", "") == "FALSE"
+        ]
+        unver_claims = [
+            r for r in claims if getattr(r, "verdict", "") == "UNVERIFIED"
+        ]
+        ver_claims = [
+            r for r in claims if getattr(r, "verdict", "") == "VERIFIED"
+        ]
+
+        if not claims:
+            st.info("No extractable factual claims detected.")
+        else:
+            # 1. False claims shown first with high urgency
+            if false_claims:
+                st.markdown(
+                    f'<div style="font-size:0.85rem;font-weight:800;color:#dc2626;margin-bottom:8px;">🚨 HALLUCINATED CLAIMS ({len(false_claims)})</div>',
+                    unsafe_allow_html=True,
+                )
+                for i, r in enumerate(false_claims, 1):
+                    render_claim_card(r, i)
+
+            # 2. Unverified claims
+            if unver_claims:
+                st.markdown(
+                    f'<div style="font-size:0.85rem;font-weight:800;color:#d97706;margin-bottom:8px;">⚠️ COULD NOT VERIFY ({len(unver_claims)})</div>',
+                    unsafe_allow_html=True,
+                )
+                for i, r in enumerate(unver_claims, 1):
+                    render_claim_card(r, i)
+
+            # 3. Verified claims
+            if ver_claims:
+                with st.expander(
+                    f"✅ Verified Claims ({len(ver_claims)})", expanded=True
+                ):
+                    for i, r in enumerate(ver_claims, 1):
+                        render_claim_card(r, i)
+
+# ── Session History ───────────────────────────────────────────────────────────
+if st.session_state.history:
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-heading">📋 Session Query History</div>',
+        unsafe_allow_html=True,
+    )
+    for i, h in enumerate(reversed(st.session_state.history), 1):
+        score_val = h["score"]
+        if score_val >= 80:
+            badge_color, badge_bg = "#15803d", "#f0fdf4"
+        elif score_val >= 55:
+            badge_color, badge_bg = "#b45309", "#fffbeb"
+        else:
+            badge_color, badge_bg = "#b91c1c", "#fef2f2"
+
+        st.markdown(
+            f"""
+        <div class="hist-card-clean">
+            <span style="background:{badge_bg};color:{badge_color};padding:4px 10px;border-radius:9999px;font-size:0.75rem;font-weight:800;">
+                {h['label']}
+            </span>
+            <div style="flex:1;font-size:0.9rem;font-weight:600;color:#1e293b;">
+                {safe(h['query'][:75])}{"…" if len(h['query']) > 75 else ""}
+            </div>
+            <div style="font-size:0.95rem;font-weight:800;color:{badge_color};">
+                {score_val}/100
+            </div>
+            <div style="font-size:0.75rem;color:#64748b;">
+                🔴 {h['false']} false &nbsp; 🟡 {h['unverified']} unverified &nbsp; 🟢 {h['verified']} verified
+                &nbsp;·&nbsp; {h.get('total_s', 0):.1f}s
+            </div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )

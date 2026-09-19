@@ -1,0 +1,28 @@
+# Environment & Secrets
+.env
+.env.*
+.streamlit/secrets.toml
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDE & OS
+.DS_Store
+.vscode/
+.idea/
+
+# Streamlit run / cache
+.streamlit/*.local.toml
+
+# Evaluation / temporary results
+results/*.json
+results/*.csv

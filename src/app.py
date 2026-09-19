@@ -628,8 +628,7 @@ with st.sidebar:
     1. **Generate** — LLM produces comprehensive answer  
     2. **Extract** — Isolates atomic factual claims  
     3. **Retrieve** — Fetches Wikipedia search snippets  
-    4. **Verify** — Rigorously tests claim vs evidence  
-    5. **Score** — Computes weighted trust index (0-100)
+    4. **Verify** — Validates each claim against evidence
     """
     )
 
@@ -761,33 +760,13 @@ if submit and query.strip():
 # ── Results Rendering ─────────────────────────────────────────────────────────
 if st.session_state.last_result:
     res = st.session_state.last_result
-    score = int(res.trust_score.score)
-    vstyle = get_verdict_style(score)
 
     total_c = res.trust_score.total_claims
     vc = res.trust_score.verified_count
     fc = res.trust_score.false_count
     uc = res.trust_score.unverified_count
 
-    # 1. Big Verdict Card
-    st.markdown(
-        f"""
-    <div class="verdict-banner" style="background:{vstyle['bg']};border:1.5px solid {vstyle['border']};">
-        <div class="verdict-icon">{vstyle['icon']}</div>
-        <div class="verdict-info">
-            <div class="verdict-title" style="color:{vstyle['color']};">{vstyle['title']}</div>
-            <div class="verdict-sub" style="color:{vstyle['color']};">{vstyle['sub']}</div>
-        </div>
-        <div class="verdict-score-box">
-            <div class="verdict-score-num" style="color:{vstyle['color']};">{score}</div>
-            <div class="verdict-score-lbl">TRUST SCORE</div>
-        </div>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-    # 2. Metric Stat Cards
+    # 1. Metric Stat Cards
     st.markdown(
         f"""
     <div class="stat-card-grid">
@@ -839,7 +818,7 @@ if st.session_state.last_result:
             unsafe_allow_html=True,
         )
 
-    # 4. Latency Timing Flow
+    # 3. Latency Timing Flow
     st.markdown(
         f"""
     <div class="pipeline-clean-bar">
@@ -864,8 +843,8 @@ if st.session_state.last_result:
         </div>
         <div>→</div>
         <div class="pipeline-step-item">
-            <div class="pipeline-step-title">🛡️ 5. Score</div>
-            <div class="pipeline-step-time">{res.trust_score.score}/100</div>
+            <div class="pipeline-step-title">📊 Claims Evaluated</div>
+            <div class="pipeline-step-time">{total_c} claims</div>
         </div>
     </div>
     """,
@@ -995,28 +974,31 @@ if st.session_state.history:
         unsafe_allow_html=True,
     )
     for i, h in enumerate(reversed(st.session_state.history), 1):
-        score_val = h["score"]
-        if score_val >= 80:
-            badge_color, badge_bg = "#15803d", "#f0fdf4"
-        elif score_val >= 55:
-            badge_color, badge_bg = "#b45309", "#fffbeb"
+        fc = h.get("false", 0)
+        uc = h.get("unverified", 0)
+        vc = h.get("verified", 0)
+        tot = fc + uc + vc
+        if fc > 0:
+            badge_color, badge_bg, badge_lbl = "#b91c1c", "#fef2f2", f"🚨 {fc} False"
+        elif uc > 0:
+            badge_color, badge_bg, badge_lbl = "#b45309", "#fffbeb", f"⚠️ {uc} Unverified"
         else:
-            badge_color, badge_bg = "#b91c1c", "#fef2f2"
+            badge_color, badge_bg, badge_lbl = "#15803d", "#f0fdf4", "✅ All Verified"
 
         st.markdown(
             f"""
         <div class="hist-card-clean">
             <span style="background:{badge_bg};color:{badge_color};padding:4px 10px;border-radius:9999px;font-size:0.75rem;font-weight:800;">
-                {h['label']}
+                {badge_lbl}
             </span>
             <div style="flex:1;font-size:0.9rem;font-weight:600;color:#1e293b;">
                 {safe(h['query'][:75])}{"…" if len(h['query']) > 75 else ""}
             </div>
-            <div style="font-size:0.95rem;font-weight:800;color:{badge_color};">
-                {score_val}/100
+            <div style="font-size:0.85rem;font-weight:700;color:#64748b;">
+                {tot} claims
             </div>
             <div style="font-size:0.75rem;color:#64748b;">
-                🔴 {h['false']} false &nbsp; 🟡 {h['unverified']} unverified &nbsp; 🟢 {h['verified']} verified
+                🔴 {fc} false &nbsp; 🟡 {uc} unverified &nbsp; 🟢 {vc} verified
                 &nbsp;·&nbsp; {h.get('total_s', 0):.1f}s
             </div>
         </div>
